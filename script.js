@@ -31,7 +31,13 @@
         { hanja: "制", counts: [6, 8] },
         { hanja: "亞", counts: [4, 8] },
         { hanja: "敎", counts: [7, 11] },
-        { hanja: "和", counts: [5, 8] }
+        { hanja: "和", counts: [5, 8] },
+        // 💡 [새로 추가] 좌부변, 우부방 2획/3획 다중 획수 허용 치트키!
+        { hanja: "降", counts: [2, 3] }, // '강우'의 降 (좌부변)
+        { hanja: "陽", counts: [2, 3] }, // '광양'의 陽 (좌부변)
+        { hanja: "陋", counts: [2, 3] }, // '고루'의 陋 (좌부변)
+        { hanja: "阿", counts: [2, 3] }, // '아나'의 阿 (좌부변)
+        { hanja: "那", counts: [2, 3] }  // '아나'의 那 (우부방)
     ];
 
     window.addEventListener('load', () => {
