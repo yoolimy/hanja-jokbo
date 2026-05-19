@@ -37,3 +37,4 @@ var hanzilookup = (function() {
 
     return { init: init, recognize: recognize };
 })();
+

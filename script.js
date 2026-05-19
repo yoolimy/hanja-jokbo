@@ -374,3 +374,4 @@ window.clearAll = function() {
     document.getElementById("rightButtons").innerHTML = '<div class="loading">여기에 부수 기반 추천 한자가 뜹니다.</div>';
     document.getElementById("result").innerHTML = manualHTML;
 };
+
