@@ -343,6 +343,7 @@ window.copyToClipboard = function(text, showToastFlag = true) {
     }
 };
 
+
 function fallbackCopyText(text, showToastFlag) {
     const textArea = document.createElement("textarea");
     textArea.value = text;
