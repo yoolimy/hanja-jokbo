@@ -22,7 +22,6 @@ var hanzilookup = (function() {
         var userCount = strokes.length;
         var results = [];
 
-        // 💡 오차 범위 수정: 0(정확히 일치)에서 +1까지만 탐색
         for (var i = 0; i <= 1; i++) {
             var count = userCount + i;
             if (_mobiDict[count]) {

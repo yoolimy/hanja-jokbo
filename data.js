@@ -351,7 +351,6 @@ const jokboData = [
     { hanja: "干", question: "창과 방패, 무기, 전쟁이라는 뜻의 한자 干戈의 독음은 OO이다?", answer: "간과", radical: "干", stroke: 3 },
     { hanja: "戈", question: "창과 방패, 무기, 전쟁이라는 뜻의 한자 干戈의 독음은 OO이다?", answer: "간과", radical: "戈", stroke: 4 },
 
-    // === [해우] 解(13획, 角) / 優(17획, 人) ===
     { hanja: "解", question: "解優의 독음은?", answer: "해우", radical: "角", stroke: 13 },
     { hanja: "優", question: "解優의 독음은?", answer: "해우", radical: "亻", stroke: 17 }
 ];
