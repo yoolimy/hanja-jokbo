@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>한자 족보 검색기</title>
+    <title>AI 한자 족보 검색기</title>
     <style>
         body {
             font-family: 'Malgun Gothic', sans-serif;
@@ -22,15 +22,19 @@
             width: 100%;
             max-width: 650px;
             text-align: center;
+            box-sizing: border-box;
         }
-        h2 { color: #333; margin-bottom: 20px; }
+        h2 { color: #333; margin-bottom: 5px; }
+        .subtitle { font-size: 14px; color: #888; margin-bottom: 20px; }
+
         canvas {
             border: 3px solid #444;
             background: #fff;
             cursor: crosshair;
             border-radius: 10px;
-            touch-action: none; /* 모바일 스크롤 방지 */
+            touch-action: none;
             box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+            max-width: 100%;
         }
         .controls { margin: 20px 0; }
         .clear-btn {
@@ -46,37 +50,62 @@
         }
         .clear-btn:hover { background-color: #3f51b5; }
 
-        /* 검색 결과 좌우 분할 레이아웃 */
+        /* 결과창 좌우 분할 레이아웃 */
         #hanjaChoices {
             display: flex;
+            flex-direction: column;
             margin-top: 25px;
-            border-top: 2px solid #eee;
-            padding-top: 20px;
-            gap: 15px;
-        }
-        .choice-column {
-            flex: 1;
-            min-height: 180px;
-            padding: 10px;
+            border: 2px solid #e0e0e0;
+            background: #fff;
             border-radius: 10px;
+            overflow: hidden; /* 자식 요소가 모서리를 둥글게 따라가도록 */
+            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+            text-align: left;
         }
-        .left-col {
-            border: 1px solid #e0e0e0;
+
+        /* 화면 폭이 550px 이상일 때만 좌우로 배치 */
+        @media (min-width: 550px) {
+            #hanjaChoices { flex-direction: row; }
+        }
+
+        .section-box {
+            padding: 15px;
+            flex: 1; /* 좌우 공간을 50:50으로 정확히 분할 */
+        }
+
+        .section-box.ai-box {
             background: #fafafa;
+            border-bottom: 2px dashed #ddd; /* 모바일용 점선 */
         }
-        .right-col {
-            border: 1px solid #c5cae9;
-            background: #f0f4ff; /* 부수 추천 영역은 다른 색으로 강조 */
+
+        @media (min-width: 550px) {
+            .section-box.ai-box {
+                border-bottom: none;
+                border-right: 2px dashed #ddd; /* PC용 세로 점선 */
+            }
         }
+
+        .section-box.radical-box {
+            background: #f8f9ff;
+        }
+
         .col-title {
-            font-size: 13px;
+            font-size: 15px;
             font-weight: bold;
             margin-bottom: 12px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #ddd;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column; /* 제목과 부제목이 겹치거나 깨지지 않도록 위아래로 깔끔하게 배치 */
+            align-items: flex-start;
+            gap: 5px;
         }
-        .left-col .col-title { color: #666; }
-        .right-col .col-title { color: #3f51b5; }
+        .sub-desc {
+            font-size: 12px;
+            font-weight: normal;
+            color: #888;
+            word-break: keep-all; /* 단어 중간에서 보기 싫게 줄바꿈되는 현상 방지 */
+        }
 
         /* 한자 버튼 스타일 */
         .hanja-btn {
@@ -86,7 +115,7 @@
             margin: 6px;
             cursor: pointer;
             background: white;
-            color: #000 !important; /* 글자색 검정 고정 */
+            color: #000 !important;
             border: 1px solid #ccc;
             border-radius: 10px;
             font-weight: bold;
@@ -101,8 +130,19 @@
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
+        /* 족보에 있는 글자 강조 (왼쪽창 용) */
+        .hanja-btn.highlight {
+            background: #fff9c4;
+            border: 2px solid #fbc02d;
+            color: #d32f2f !important;
+        }
+        /* 부수 추천 글자 강조 (오른쪽/아래창 용) */
+        .hanja-btn.radical-btn {
+            border-color: #9fa8da;
+            color: #3f51b5 !important;
+        }
 
-        /* 결과창 스타일 */
+        /* 최종 상세 결과창 */
         #result {
             margin-top: 25px;
             padding: 20px;
@@ -114,41 +154,624 @@
             box-sizing: border-box;
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
-        .item { text-align: left; border-bottom: 1px solid #f0f0f0; padding: 12px 0; }
-        .item:last-child { border-bottom: none; }
-        .item b { color: #555; }
-        .ans-text { color: #d9534f; font-weight: bold; }
+        .loading {
+            font-size: 13px;
+            color: #888;
+            padding: 10px 0;
+        }
+        #resultToast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: none;
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>한자 족보 검색기</h2>
-    <p style="font-size: 14px; color: #888;">한자를 그리거나, 왼쪽 부수만 그려보세요!</p>
+    <h2>AI 한자 족보 검색기</h2>
+    <p class="subtitle">모르면 부수(왼쪽/위)만 그려보세요!</p>
 
     <canvas id="canvas" width="300" height="300"></canvas>
 
     <div class="controls">
-        <button class="clear-btn" onclick="clearAll()">다시 쓰기</button>
+        <button class="clear-btn" onclick="clearAll()">지우기 (다시 쓰기)</button>
     </div>
 
+    <!-- 결과창을 하나의 큰 박스 안에 2개의 섹션으로 분리 -->
     <div id="hanjaChoices">
-        <div class="choice-column left-col">
-            <div class="col-title">일반 매칭</div>
-            <div id="leftButtons"></div>
+        <div class="section-box ai-box">
+            <div class="col-title" style="color: #d32f2f;">
+                <span>🤖 AI 인식 결과</span>
+                <span class="sub-desc">노란색은 족보 적중</span>
+            </div>
+            <div id="leftButtons">
+                <div class="loading">캔버스에 한자나 부수를 써보세요.</div>
+            </div>
         </div>
-        <div class="choice-column right-col">
-            <div class="col-title">부수 추천(7획↑ 복잡한 한자)</div>
-            <div id="rightButtons"></div>
+
+        <div class="section-box radical-box">
+            <div class="col-title" style="color: #3f51b5;">
+                <span>📝 부수 추천 기능</span>
+                <span class="sub-desc">복잡한 한자는 부수만 쓰세요!</span>
+            </div>
+            <div id="rightButtons">
+                <div class="loading">여기에 부수 기반 추천 한자가 뜹니다.</div>
+            </div>
         </div>
     </div>
 
-    <div id="result">한자를 좆대로 끄적이라</div>
+    <div id="result">마우스나 터치로 한자를 써보세요!</div>
 </div>
+<div id="resultToast">복사 완료! 👍</div>
 
-<script src="data.js"></script>
-<script src="hanzi.js"></script>
-<script src="script.js"></script>
+<script>
+    // 수백 개의 질문에 포함된 모든 한자를 한 번에 추출하고 족보로 자동 변환하는 동적 로직
+    const rawQA = [
+        // --- 1. 실수로 누락되었던 오리지널 초기 족보 데이터 완벽 복구 ---
+        { q: "統一을 읽으면 OO이다?", a: "통일" },
+        { q: "家宅 을 (를) 읽으면 OO이다?", a: "가택" },
+        { q: "感想를 읽으면?", a: "감상" },
+        { q: "江凌를 읽으면?", a: "강릉" },
+        { q: "開拓을 읽으면 00이다?", a: "개척" },
+        { q: "坑道을(를) 읽으면 OO이다?", a: "갱도" },
+        { q: "巨濟를 읽으면?", a: "거제" },
+        { q: "京機道를 읽으면?", a: "경기도" },
+        { q: "廣州를 읽으면?", a: "광주" },
+        { q: "敎唆을(를) 읽으면 OO이다?", a: "교사" },
+        { q: "舊習을 (를) 읽으면 OO이다?", a: "구습" },  // 누락되었던 習 복구!
+        { q: "公州를 읽으면?", a: "공주" },
+        { q: "독음 公衆道德 읽으면?", a: "공중도덕" },
+        { q: "晩翠을(를) 읽으면 OO이다?", a: "만취" },  // 누락되었던 翠 복구!
+        { q: "番地 을(를)읽으면 00이다?", a: "번지" },
+        { q: "寶庫을(를) 읽으면 OO이다?", a: "보고" },
+        { q: "相逢을(를) 을 읽으면 OO이다?", a: "상봉" },
+        { q: "亞細亞 를 읽으면 OOO 이다?", a: "아세아" },
+        { q: "良心 을(를)읽으면 00이다?", a: "양심" },
+        { q: "王十理를 읽으면 OOO이다?", a: "왕십리" },
+        { q: "料理을(를)읽으면 OO이다?", a: "요리" },
+        { q: "우리나라 지명 慶商北道를 읽으면?", a: "경상북도" },
+        { q: "月靈을 읽으면 00이다?", a: "월령" },
+        { q: "飮料 를 읽으면 OO 이다?", a: "음료" },
+        { q: "義霧 를 읽으면 OO 이다?", a: "의무" },
+        { q: "議會 를 읽으면 OO 이다?", a: "의회" },
+        { q: "이누야사에 나오는 캐릭터 셋쇼마루의 이름을 한자어로 읽으면 OOO이다? 殺生丸", a: "살생환" },
+        { q: "節慨 을(를) 읽으면 00이다?", a: "절개" },
+        { q: "絶到 를 읽으면 OO 이다?", a: "절도" },
+        { q: "制裁 를 읽으면 OO 이다?", a: "제재" },
+        { q: "平和를 읽으면?", a: "평화" },
+        { q: "孝心을(를)읽으면 OO이다?", a: "효심" },
+        { q: "管轄을(를) 읽으면 ○○이다?", a: "관할" },
+        { q: "價格을(를) 읽으면 ○○이다?", a: "가격" },
+        { q: "瞳孔을(를) 읽으면 OO이다?", a: "동공" },
+        { q: "槪念을(를) 읽으면 OO이다?", a: "개념" },
+        { q: "容器을(를) 읽으면 OO이다?", a: "용기" },
+        { q: "激憤을 읽으면 무엇인가?", a: "격분" },
+        { q: "放浪을 읽으면 무엇인가?", a: "방랑" },
+        { q: "表裏不同을 읽으면 무엇인가?", a: "표리부동" },
+        { q: "以心傳心을 읽으면?", a: "이심전심" },
+        { q: "昏絶을(를) 읽으면 OO이다?", a: "혼절" },
+        { q: "甚深을(를) 읽으면 OO이다?", a: "심심" },
+        { q: "勿論을(를) 읽으면 ○○이다?", a: "물론" },
+        { q: "甚至於를(을) 읽으면?", a: "심지어" },
+        { q: "河必를(을) 읽으면?", a: "하필" },
+        { q: "都大體를(을) 읽으면?", a: "도대체" },
+        { q: "於此彼 읽으면?", a: "어차피" },
+        { q: "無慮를(을) 읽으면?", a: "무려" },
+        { q: "亦是를(을) 읽으면?", a: "역시" },
+
+        // --- 2. 나중에 추가하신 족보 데이터 ---
+        { q: "[독음] 懇切(간절) 看做(간주) 間隙(간극) 紺色(감색) 猫戀?", a: "묘련" },
+        { q: "[독음] 堪當(감당) 減殺(감쇄) 感慨(감개) 鑑定?", a: "감정" },
+        { q: "[독음] 降雨 (강우) 醵出(갹출) 車馬(거마) 乾燥?", a: "건조" },
+        { q: "[독음] 강원도지명 江陵(강릉) 高城?", a: "고성" },
+        { q: "[독음] 凱旋(개선) 開拓(개척) 槪括(개괄) 契約?", a: "계약" },
+        { q: "[독음] 乾偃(건언) 劫奪(겁탈) 牽牛(견우) 譴責?", a: "견책" },
+        { q: "[독음] 慊然(겸연) 更迭(경질) 驚蟄(경칩) 驚愕?", a: "경악" },
+        { q: "[독음] 경기도지명 高陽 (고양) 果川(과천) 廣州 (광주) 加平?", a: "가평" },
+        { q: "[독음] 輕蔑(경멸) 固陋(고루) 高成(고성) 鼓吹?", a: "고취" },
+        { q: "[독음] 경상남도지명 巨濟(거제) 居昌(거창) 固城?", a: "고성" },
+        { q: "[독음] 경상북도지명 慶州(경주) 高靈?", a: "고령" },
+        { q: "[독음] 鷄肋(계륵) 干潟地*(간석지) 揭示(게시) 瞼然(검연) 固陋?", a: "고루" },
+        { q: "[독음] 汨沒(골몰) 滑沒(골몰) 滑稽(골계) 鞏固?", a: "공고" },
+        { q: "[독음] 攻駁(공박) 恐綽(공작) 交易(교역) 敎唆?", a: "교사" },
+        { q: "[독음] 誇張(과장) 官衙(관아) 刮目(괄목) 光明?", a: "광명" },
+        { q: "[독음] 光陽(광양) 罫紙(괘지) 坑道(갱도) 更生?", a: "갱생" },
+        { q: "[독음] 乖愎(괴퍅) 乖離(괴리) 過剩(과잉) 過仍?", a: "과잉" },
+        { q: "[독음] 膠着(교착) 攪亂(교란) 怪獸(괴수) 傀儡?", a: "괴뢰" },
+        { q: "느낀 생각, 느낀바, 소감이라는 뜻의 한자어는 00(感想)이다?", a: "감상" },
+        { q: "[독음] 서울행정 江西區?", a: "강서구" },
+        { q: "예술작품을 음미하여 이해하고 즐긴다는 뜻의 한자어는 00(鑑賞)이다?", a: "감상" },
+        { q: "[독음] 우리나라지명 江原道(강원도) 慶尙南道(경상남도) 光州廣域市?", a: "광주광역시" },
+        { q: "[독음] 인천광역시지명 江華?", a: "강화" },
+        { q: "[독음] 전라북도 지명 高興?", a: "고흥" },
+        { q: "창과 방패, 무기, 전쟁이라는 뜻의 한자어는 OO(干戈)이다?", a: "간과" },
+        { q: "[독음] 하늘과 땅 乾坤?", a: "건곤" },
+        { q: "[독음]가차(假借) 감정(鑑定) 갱생 (更生) 거마?", a: "車馬" },
+        { q: "墾切의 독음은?", a: "간절" },
+        { q: "看做의 독음은?", a: "간주" },
+        { q: "間宅의 독음은 무엇인가?", a: "간택" },
+        { q: "感慨의 독음은?", a: "감개" },
+        { q: "鑑情의 독음은 OO이다?", a: "감정" },
+        { q: "降雨의 독음은 OO이다?", a: "강우" },
+        { q: "槪括의 독음은 OO이다?", a: "개괄" },
+        { q: "車末의 독음은?", a: "거말" },
+        { q: "乾坤의 독음은 OO이다?", a: "건곤" },
+        { q: "鷄肋의 독음은 OO이다?", a: "계륵" },
+        { q: "固城의 독음은?", a: "고성" },
+        { q: "光明의 독음은?", a: "광명" },
+        { q: "光陽의 독음은?", a: "광양" },
+        { q: "光州廣域市의 독음은?", a: "광주광역시" },
+        { q: "廣州의 독음은?", a: "광주" },
+        { q: "罫祇를 독음은?", a: "괘기" },
+        { q: "乖愎의 독음은?", a: "괴퍅" },
+        { q: "樂園의 독음은?", a: "낙원" },
+        { q: "낡은 사상이나 풍습에 젖어 고집이 세고 변통성이 없다는 뜻인 固陋의 독음은 00이다?", a: "고루" },
+        { q: "독음 冠岳究?", a: "관악구" },
+        { q: "독음 綠地?", a: "녹지" },
+        { q: "독음 白頭山?", a: "백두산" },
+        { q: "독음 抱腹?", a: "포복" },
+        { q: "독음) 서울시지명 江東區 (강동구) 江西區 (강서구) 江南區?", a: "강남구" },
+        { q: "독음) 서울시지명 江北區 (강북구) 冠岳區<관악구> 廣津區 (광진구) 冠惡區?", a: "관악구" },
+        { q: "독음) 전라남도지명 高興 (고흥) 光陽?", a: "광양" },
+        { q: "독음) 전라북도지명 高敞 (고창) 康津?", a: "강진" },
+        { q: "독음) 지명 - 京畿道 (경기도) 江原道?", a: "강원도" },
+        { q: "독음) 지명 - 慶尙南道 (경상남도) 慶尙北道?", a: "경상북도" },
+        { q: "독음) 충청남도지명 公州?", a: "공주" },
+        { q: "독음) 충청북도지명 槐山?", a: "괴산" },
+        { q: "독음에 관한 문제 입니다. [문제] 鑑定?", a: "감정" },
+        { q: "독음에 관한 문제입니다. 사물에 관한 문제입니다. 사물은 실유(實有)가 아니라 OO(假有)이다?", a: "가유" },
+        { q: "독음에 관한 문제입니다. 사물에 관한 문제입니다. 사물은 OO(實有)가 아니라 가유(假有)이다?", a: "실유" },
+        { q: "豆滿江의 독음은?", a: "두만강" },
+        { q: "말 에 관한 문제 입니다.한자어 '錦依還鄕'의 독음은 무엇인가?", a: "금의환향" },
+        { q: "말에 관한 문제 입니다. 한자어 '膾炙'의 독음은 무엇인가?", a: "회자" },
+        { q: "無塵의 독음은?", a: "무진" },
+        { q: "阿那의 독음은 무엇인가?", a: "아나" },
+        { q: "魏務子의 독음은,?", a: "위무자" },
+        { q: "좋은 사람들 사이에 잇으면 그 영향을 받아 자기도 모르는 사이에 좋은 사람이 된다는 麻中之蓬 의 독음은?", a: "마중지봉" },
+        { q: "해우소, 解優의 독음은?", a: "해우" }
+    ];
+
+    // AI 부수 추천을 완벽하게 지원하기 위한 [부수 및 구성요소: 속한 한자들] 대사전 구축!
+    const partToHanja = {
+        // --- 1. 공식 부수 매핑 (기존) ---
+        "氵": "江凌濟激浪深河減潟汨沒滑滿津渴測港湖湯源漢潔潤澤濁濃濕洗浴海",
+        "忄": "慨慊愕恐愎怪情慣悔恨惜",
+        "心": "念感想惡懇戀慶必息悲意愚慰忘忠怨怒忍愁慕憂慮",
+        "彳": "德彼徑待律後徒得復微徵彷彿徘徊役往很徐從御",
+        "亻": "做偃仍傀儡假借依優傳價件任休伐伯伴伸似位低住何作佳使例供信保便係促俊俗修俳俵健側停備傷傾僅働像僑僕僚僧儀億儒償",
+        "扌": "拓括揭攪抱指捨掃推接提揮損拾擔撤播打投抗折拔拘拙招拜擴拷持振捕探授排掘掛採控掩措描揚換握援搖搜搬搭携搾摘操",
+        "艹": "蔑華蓬苦草茶落葉萬藥藝蘇蘭菊蒼荒莫花芳英茂苗若苟苑茵茹荷莉莊莖莞菩董葦葬蒙蓄",
+        "糹": "統紺約綽紙絶細結絡給維練綠線緣網緊繁纖紀納純級終組經織",
+        "阝": "隙降陵陽陋阿那鄕都院陣隊階際障隱鄰郭部防阻附限除陰陳陷陪郵郡郊郞鄭",
+        "辶": "迭道過還逢達造迅迎近返退送逃逆迷追連進遊運遠適遲遷遺避邊巡違透遞速遇遍遵",
+        "宀": "定官宅實寶容家安室宇宙客宮察宿寒富寧寬寢寫守完宗宜宴寄密寡寵",
+        "刀": "切刮剩判別到制初劍",
+        "刂": "刊刑列利刷刺刻則前剔剖剛剝副割創劃劇劑",
+        "木": "機槪構標模樹橋校根格栽案梅相村材杯果枝林松板析柱柳柴核株桂桃檢權槐末",
+        "日": "晩昏晴明曜暖暴曝是早旬昆昇昌星春昭時景暗暮曆曉易更",
+        "土": "坑地堅堤堪報場塊塔塗境塾墓墜增墨壁壇壓壞在均坐型城基域塵",
+        "言": "論議設計譴誇語讀調談證識警譯護譽變讓讚訂訃訊討訓託記訟訣訪許訴診註詐詔評詞詠試詩詰話該詳誠誤說誰課誼諜諦諧諮諱謀謝講謠",
+        "攵": "攻敎敞放敗故救敢散敬敵數",
+        "广": "廣庫店府度座庭康庸廉廊廢",
+        "口": "唆商器唱和加吹右各合吉同名君告味呼命品員哲單嚴",
+        "車": "轄軌軍軒軟轉輕較載輸",
+        "竹": "管節笑第筆等答策算箇範築簡籍",
+        "雨": "霧靈雪雲電震露",
+        "食": "飠饣飮飯飼飽飾養餓餘館",
+        "目": "看着瞼瞳眼眠督盲直相省縣",
+        "門": "間開閉閣閨關閥問聞閱",
+        "月": "肋腹膾膠肌肝股肥肩肯育肺胃背胎胞胸能脂脅脈脚脫腦腰腸膚膜膨臟有",
+        "犭": "猫獸狗猪犯狂狩獨獲猛",
+        "罒": "罫網羅罰罪置署罷",
+        "羽": "翠習翼翔翌翁翰",
+        "酉": "醵", "凵": "出", "乙": "乾亂", "火": "燥無然", "几": "凱", "方": "旋於", "大": "契奪大", "力": "劫務", "牛": "牽牛", "貝": "責賞", "馬": "驚駁馬", "虫": "蟄", "干": "平干", "囗": "固園", "鼓": "鼓", "尸": "居", "鳥": "鷄", "禾": "稽", "革": "鞏", "弓": "張", "丿": "乖之", "隹": "離", "行": "衙", "儿": "光", "生": "生", "襾": "西", "匚": "區", "厂": "原", "十": "南十", "巾": "市", "臼": "興", "戈": "戈", "一": "一不", "示": "祇示", "八": "公", "血": "衆", "冖": "冠", "山": "岳山", "穴": "究", "白": "白", "頁": "頭", "匕": "北", "田": "畿當", "豆": "豆", "金": "錦鑑", "衣": "衣表裏裁", "二": "亞", "鬼": "魏", "子": "子孝孔", "曰": "會", "麻": "麻", "丨": "中", "角": "解", "殳": "殺", "丶": "丸", "釆": "番", "艮": "良", "玉": "王理", "米": "料", "羊": "義", "止": "此", "虍": "慮", "亠": "亦交", "甘": "甚", "勹": "勿", "至": "至", "骨": "體",
+
+        // --- 2. 비공식 부수 & 한자의 모든 구성 요소 매핑 (사용자 요청 핵심 마법 기능!) ---
+        "豈": "凱鎧", "山": "凱岳密", "豆": "凱豊頭短", "充": "統", "豕": "家", "乇": "宅",
+        "咸": "感減", "相": "想", "工": "江巨攻", "夌": "凌陵", "幵": "開", "石": "拓",
+        "亢": "坑", "首": "道", "齊": "濟", "幾": "機", "孝": "敎", "子": "敎孝孔仔",
+        "夋": "唆", "隹": "舊離奪", "白": "習", "八": "公", "厶": "公", "血": "衆",
+        "众": "衆", "悳": "德", "免": "晩", "卒": "翠", "田": "番細當", "也": "地",
+        "玉": "寶理", "貝": "寶責賞", "夆": "逢", "里": "理裏", "斗": "料", "鹿": "慶塵",
+        "匕": "北此", "巫": "靈", "欠": "飮吹", "羊": "義", "我": "義", "務": "霧",
+        "曾": "會", "杀": "殺", "卽": "節", "旣": "慨槪", "色": "絶", "至": "到",
+        "牛": "制牽", "哉": "裁", "老": "孝", "官": "管", "害": "轄", "賈": "價",
+        "各": "格", "童": "瞳", "乙": "孔亂乾", "今": "念", "谷": "容", "犬": "器獸然",
+        "敫": "激", "賁": "憤", "方": "放於旋", "良": "浪", "專": "傳", "氏": "昏",
+        "甘": "甚紺", "罙": "深", "侖": "論", "可": "河", "者": "都", "骨": "體滑",
+        "豊": "體", "止": "此", "皮": "彼", "舞": "無", "思": "慮", "疋": "是旋定",
+        "艮": "懇", "七": "切", "手": "看", "故": "做", "泉": "隙", "苗": "猫",
+        "䜌": "戀", "甚": "堪", "尙": "當", "監": "鑑", "夅": "降", "豦": "醵",
+        "十": "乾", "喿": "燥", "成": "城", "舌": "括刮亂", "丰": "契", "勺": "約",
+        "匽": "偃", "去": "劫", "玄": "牽", "遣": "譴", "朿": "責", "兼": "慊",
+        "敬": "驚", "執": "蟄", "咢": "愕", "昜": "陽", "巠": "輕", "戍": "蔑",
+        "古": "固居做", "丙": "陋", "曰": "昌會", "奚": "鷄", "力": "肋劫加務",
+        "曷": "揭", "僉": "瞼", "尤": "稽", "巩": "鞏", "爻": "駁", "卓": "綽",
+        "長": "張", "吾": "衙", "卦": "罫", "北": "乖", "复": "愎", "凶": "離",
+        "乘": "剩", "乃": "仍", "翏": "膠", "覺": "攪", "單": "獸", "鬼": "傀槐魏",
+        "畾": "儡", "彔": "綠", "包": "抱", "叚": "假", "昔": "借", "睪": "擇",
+        "帛": "錦", "衣": "依裏表裁", "睘": "還", "卿": "鄕", "會": "膾", "肉": "炙然",
+        "委": "魏", "矛": "務", "逢": "蓬"
+    };
+
+    // 위의 사전에서 글자 하나하나 분해해서 매핑 객체 자동 생성
+    const radicalMap = {};
+    for (const [rad, chars] of Object.entries(partToHanja)) {
+        for (const char of chars) {
+            if (!radicalMap[char]) radicalMap[char] = rad; // 최초 매핑 유지
+        }
+    }
+
+    const jokboData = [];
+    const uniqueQnA = new Map();
+
+    // 1. 중복 질문 완벽 제거
+    rawQA.forEach(item => {
+        const key = item.q.trim();
+        if(!uniqueQnA.has(key)) uniqueQnA.set(key, item);
+    });
+
+    // 2. 질문에 포함된 '모든 한자'를 추출하여 개별 데이터로 자동 분할 생성
+    const hanjaRegex = /[\u4E00-\u9FFF]/g;
+    uniqueQnA.forEach((item) => {
+        const hanjas = item.q.match(hanjaRegex) || [];
+        const uniqueHanjas = [...new Set(hanjas)];
+        uniqueHanjas.forEach(char => {
+            jokboData.push({
+                hanja: char,
+                question: item.q,
+                answer: item.a,
+                radical: radicalMap[char] || char // 부수 맵에 없으면 자기 자신을 부수로 설정 (AI 완벽 호환)
+            });
+        });
+    });
+
+    let canvas, ctx, isDrawing = false;
+    let strokes = [];
+    let currentX = [];
+    let currentY = [];
+    let searchTimeout = null;
+
+    window.addEventListener('load', () => {
+        canvas = document.getElementById("canvas");
+        ctx = canvas.getContext("2d");
+
+        ctx.lineWidth = 8;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = "#222";
+
+        canvas.addEventListener("mousedown", startDrawing);
+        canvas.addEventListener("mousemove", draw);
+        canvas.addEventListener("mouseup", stopDrawing);
+        canvas.addEventListener("mouseout", stopDrawing);
+
+        canvas.addEventListener("touchstart", startDrawing, { passive: false });
+        canvas.addEventListener("touchmove", draw, { passive: false });
+        canvas.addEventListener("touchend", stopDrawing);
+        canvas.addEventListener("touchcancel", stopDrawing);
+    });
+
+    function getCoordinates(e) {
+        const rect = canvas.getBoundingClientRect();
+        let clientX, clientY;
+
+        if (e.type.includes('touch')) {
+            if (!e.touches || e.touches.length === 0) return null;
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+        };
+    }
+
+    function startDrawing(e) {
+        if (e.type.includes('touch')) e.preventDefault();
+        const pos = getCoordinates(e);
+        if (!pos) return;
+
+        isDrawing = true;
+        currentX = [pos.x];
+        currentY = [pos.y];
+
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+    }
+
+    function draw(e) {
+        if (!isDrawing) return;
+        if (e.type.includes('touch')) e.preventDefault();
+        const pos = getCoordinates(e);
+        if (!pos || isNaN(pos.x) || isNaN(pos.y)) return;
+
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        currentX.push(pos.x);
+        currentY.push(pos.y);
+    }
+
+    function stopDrawing(e) {
+        if (!isDrawing) return;
+        isDrawing = false;
+        ctx.closePath();
+
+        if (currentX.length > 0) {
+            strokes.push([currentX, currentY, []]);
+            currentX = [];
+            currentY = [];
+
+            // 획수 기반 추천 삭제 (AI 인식 후 한 번만 실행되도록 변경)
+            document.getElementById("rightButtons").innerHTML = '<div class="loading">AI가 형태를 판독 중입니다...</div>';
+
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(searchSmart, 800);
+        }
+    }
+
+    async function searchSmart() {
+        if (strokes.length === 0) return;
+
+        const leftButtons = document.getElementById("leftButtons");
+        leftButtons.innerHTML = '<div class="loading">구글 AI가 인식 중입니다...</div>';
+
+        const url = "https://inputtools.google.com/request?itc=zh-hant-t-i0-handwrit&app=demopage";
+        const payload = {
+            app_version: 0.4,
+            api_level: "537.36",
+            device: navigator.userAgent,
+            input_type: "0",
+            options: "enable_pre_space",
+            requests: [{
+                writing_guide: { writing_area_width: canvas.width, writing_area_height: canvas.height },
+                pre_context: "",
+                max_num_results: 15,
+                max_completions: 0,
+                language: "zh-Hant",
+                ink: strokes
+            }]
+        };
+
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+
+            if (data[0] === "SUCCESS") {
+                leftButtons.innerHTML = "";
+                const predictions = data[1][0][1];
+
+                // 한 칸에 2개 이상 뜨는 버그 수정: 무조건 첫 번째 한 글자(한자/부수)만 추출
+                const hanjaRegex = /[\u2E80-\u2EFF\u31C0-\u31EF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/;
+                const validHanjas = [];
+
+                predictions.forEach(str => {
+                    if (typeof str === 'string') {
+                        for (let i = 0; i < str.length; i++) {
+                            const char = str[i];
+                            if (hanjaRegex.test(char)) {
+                                validHanjas.push(char);
+                                break; // 한 글자를 찾으면 즉시 중지 (한 칸에 한 개만 뜨도록 강제)
+                            }
+                        }
+                    }
+                });
+
+                // 중복 제거
+                const filteredPredictions = [...new Set(validHanjas)];
+
+                // 1. 윗창(AI) 업데이트
+                filteredPredictions.forEach(char => {
+                    const isMatchedInJokbo = jokboData.some(item => item.hanja === char);
+                    addHanjaButton(char, leftButtons, isMatchedInJokbo, false);
+                });
+
+                if(filteredPredictions.length === 0) {
+                    leftButtons.innerHTML = '<div class="loading">인식된 한자가 없습니다.</div>';
+                }
+
+                // 2. 아랫창(부수) 업데이트 (AI가 부수를 인식한 경우 추가 반영!)
+                renderRadicalSuggestions(filteredPredictions);
+            }
+        } catch (err) {
+            console.error("API 호출 에러:", err);
+            leftButtons.innerHTML = '<div class="loading" style="color:red;">네트워크 에러가 발생했습니다.</div>';
+        }
+    }
+
+    // 강력해진 부수/형태 추천 엔진
+    function renderRadicalSuggestions(aiPredictions = []) {
+        const rightButtons = document.getElementById("rightButtons");
+        rightButtons.innerHTML = "";
+
+        let matchedItems = new Set();
+
+        // AI가 인식한 글자(부수)와 족보의 부수가 유니코드가 달라도(기본영역 vs 부수보충영역)
+        // 완벽하게 호환되도록 같은 무리로 묶어주는 거대한 그룹 사전
+        const radicalGroups = [
+            ["水", "氵", "⺡", "⺢", "氺", "冫", "ン", "シ"],
+            ["心", "忄", "⺖", "⺗"],
+            ["手", "扌", "⺘", "才"],
+            ["人", "亻", "⺅", "𠆢"],
+            ["肉", "月", "⺼", "⺝", "육달월"],
+            ["糸", "糹", "⺰", "纟", "糸"],
+            ["刀", "刂", "⺉"],
+            ["犬", "犭", "⺨"],
+            ["网", "罒", "⺱", "⺲", "⺳", "⺴"],
+            ["艸", "艹", "⺾", "⺿", "초", "䒑"],
+            ["示", "礻", "⻁", "⺬"],
+            ["衣", "衤", "⻂"],
+            ["宀", "면", "⺛", "갓머리", "冖", "ワ"],
+            ["干", "방패간"],
+            ["竹", "⺮", "대죽", "ケ"],
+            ["辶", "⻍", "⻎", "⻌", "책받침", "廴"],
+            ["阝", "⻏", "⻖", "우부방", "좌부방"],
+            ["門", "门", "⻔", "문문"],
+            ["言", "訁", "讠", "⻈", "말씀언"],
+            ["食", "飠", "饣", "⻝", "⻞", "밥식"],
+            ["彳", "두인변", "조금걸을척"],
+            ["火", "灬", "연화발"],
+            ["木", "나무목"],
+            ["土", "흙토"],
+            ["日", "날일"],
+            ["女", "계집녀"],
+            ["口", "입구", "囗"],
+            ["广", "엄호", "엄", "厂"],
+            ["攵", "등글월문", "夂", "夊"],
+            ["殳", "갖은등글월문"],
+            ["弓", "활궁"],
+            ["几", "⼏", "凡", "九", "乙", "⼄", "勹", "⼓", "안석궤", "새을"],
+            ["羽", "깃우"]
+        ];
+
+        jokboData.forEach(item => {
+            // 오직 AI가 인식한 글자(형태) 기반으로만 부수 추천 (획수 로직 완전 삭제)
+            aiPredictions.forEach(predChar => {
+                // 1. 글자 자체가 완벽하게 동일한 경우
+                if (predChar === item.radical) {
+                    matchedItems.add(item.hanja);
+                } else {
+                    // 2. 유니코드가 다르더라도 같은 그룹(의미)에 속하면 강제로 일치 처리
+                    for (const group of radicalGroups) {
+                        if (group.includes(predChar) && group.includes(item.radical)) {
+                            matchedItems.add(item.hanja);
+                            break;
+                        }
+                    }
+                }
+            });
+        });
+
+        // 3. [초강력 핵심 추가 기능!] 사용자가 '부수'가 아니라 한자의 '일부분(왼쪽/오른쪽 등)'만 그렸어도 전부 찾아줌!
+        aiPredictions.forEach(predChar => {
+            let searchKeys = [predChar];
+            // 인식된 글자가 속한 유니코드 그룹이 있다면, 그 그룹의 모든 글자를 검색 키로 활용
+            for (const group of radicalGroups) {
+                if (group.includes(predChar)) {
+                    searchKeys = group;
+                    break;
+                }
+            }
+
+            searchKeys.forEach(key => {
+                const matchingChars = partToHanja[key];
+                if (matchingChars) {
+                    for (let i = 0; i < matchingChars.length; i++) {
+                        const targetChar = matchingChars[i];
+                        if (jokboData.some(item => item.hanja === targetChar)) {
+                            matchedItems.add(targetChar);
+                        }
+                    }
+                }
+            });
+        });
+
+        if (matchedItems.size === 0) {
+            rightButtons.innerHTML = '<div class="loading">현재 그리신 형태와 일치하는 부수/한자가 없습니다.</div>';
+            return;
+        }
+
+        matchedItems.forEach(char => {
+            addHanjaButton(char, rightButtons, false, true);
+        });
+    }
+
+    function addHanjaButton(char, container, isHighlight = false, isRadical = false) {
+        if (!container || [...container.children].some(btn => btn.innerText === char)) return;
+
+        const btn = document.createElement("button");
+        btn.className = "hanja-btn";
+        if (isHighlight) btn.classList.add("highlight");
+        if (isRadical) btn.classList.add("radical-btn"); // 부수 창 버튼은 파란색 테두리
+
+        btn.innerText = char;
+
+        if(isHighlight) {
+            container.prepend(btn);
+        } else {
+            container.appendChild(btn);
+        }
+
+        btn.onclick = () => {
+            showFinalResult(char);
+
+            // 핵심 추가: 윗창(AI 결과)의 버튼을 클릭했을 때만 실행
+            // 클릭한 단 한 개의 글자만 다시 부수 추천 엔진으로 보내서 아랫창을 깔끔하게 필터링함!
+            if (!isRadical) {
+                renderRadicalSuggestions([char]);
+            }
+        };
+    }
+
+    window.clearAll = function() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        strokes = [];
+        isDrawing = false;
+        clearTimeout(searchTimeout);
+
+        document.getElementById("leftButtons").innerHTML = '<div class="loading">캔버스에 한자나 부수를 써보세요.</div>';
+        document.getElementById("rightButtons").innerHTML = '<div class="loading">여기에 부수 기반 추천 한자가 뜹니다.</div>';
+        document.getElementById("result").innerHTML = "마우스나 터치로 한자를 써보세요!";
+    };
+
+    function showFinalResult(char) {
+        const matches = jokboData.filter(item => item.hanja === char);
+        const resultDiv = document.getElementById("result");
+        if (!resultDiv) return;
+
+        if (matches.length === 0) {
+            resultDiv.innerHTML = `<h3 style="color:#d32f2f;">'${char}'</h3><p>이 한자는 족보 데이터에 등록되어 있지 않습니다.</p>`;
+            return;
+        }
+
+        let html = `<h3>'${char}' 관련 족보 (클릭 시 정답 복사)</h3>`;
+        matches.forEach((item) => {
+            html += `
+            <div onclick="copyToClipboard('${item.answer}')"
+                 style="border-bottom:1px solid #eee; padding:15px; text-align:left; cursor:pointer; transition: background 0.2s; border-radius:8px;"
+                 onmouseover="this.style.background='#f0f4ff'"
+                 onmouseout="this.style.background='transparent'">
+                <p style="margin: 4px 0; color:#555; font-size:14px;"><b>질문:</b> ${item.question}</p>
+                <p style="margin: 4px 0;"><b>정답:</b> <span style="color:#d32f2f; font-weight:bold; font-size:1.2em;">${item.answer}</span></p>
+            </div>`;
+        });
+        resultDiv.innerHTML = html;
+    }
+
+    window.copyToClipboard = function(text) {
+        const tempInput = document.createElement("input");
+        tempInput.value = text;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand("copy");
+        document.body.removeChild(tempInput);
+
+        const toast = document.getElementById("resultToast");
+        toast.style.display = "block";
+        setTimeout(() => { toast.style.display = "none"; }, 1500);
+    };
+</script>
 
 </body>
 </html>
